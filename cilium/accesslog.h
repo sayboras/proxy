@@ -26,12 +26,16 @@ class AccessLog : Logger::Loggable<Logger::Id::router> {
     void InitFromRequest(const std::string& policy_name,
                          const Cilium::SocketOption& option,
                          const StreamInfo::StreamInfo&,
+                         uint32_t destination_identity,
+                         const Network::Address::InstanceConstSharedPtr&,
                          const Http::RequestHeaderMap&);
     void UpdateFromResponse(const Http::ResponseHeaderMap&, TimeSource&);
 
     void InitFromConnection(const std::string& policy_name,
-                            const Cilium::SocketOption& option,
-                            const StreamInfo::StreamInfo&);
+                            const Cilium::SocketOption&,
+                            const StreamInfo::StreamInfo&,
+                            uint32_t destination_identity,
+                            const Network::Address::InstanceConstSharedPtr&);
     bool UpdateFromMetadata(const std::string& l7proto,
                             const ProtobufWkt::Struct& metadata,
                             TimeSource& time_source);

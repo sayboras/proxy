@@ -14,8 +14,16 @@ namespace Envoy {
 namespace Cilium {
 
 class CiliumTest : public testing::Test {
- protected:
+protected:
   Event::SimulatedTimeSystem time_system_;
+};
+
+class TestPolicyResolver : public Cilium::PolicyResolver {
+  // PolicyResolver
+  uint32_t resolvePolicyId(const Network::Address::Ip*) const override { return 173; }
+  const std::shared_ptr<const PolicyInstance> getPolicy(const std::string&) const override {
+    return nullptr;
+  }
 };
 
 TEST_F(CiliumTest, AccessLog) {
@@ -28,11 +36,12 @@ TEST_F(CiliumTest, AccessLog) {
   Network::MockConnection connection;
   connection.stream_info_.protocol_ = Http::Protocol::Http11;
   connection.stream_info_.start_time_ = time_system_.systemTime();
-  
+
   Network::Socket::OptionsSharedPtr options =
       std::make_shared<Network::Socket::Options>();
   auto option = std::make_shared<Cilium::SocketOption>(
-      nullptr, false, 1, 173, true, 80, "1.2.3.4", nullptr);
+		       nullptr, false, 1, true, 80, "1.2.3.4", nullptr,
+		       std::make_shared<TestPolicyResolver>());
   options->push_back(option);
 
   connection.stream_info_.downstream_connection_info_provider_->setLocalAddress(
@@ -42,7 +51,9 @@ TEST_F(CiliumTest, AccessLog) {
 
   AccessLog::Entry log;
 
-  log.InitFromRequest("1.2.3.4", *option, connection.stream_info_, headers);
+  log.InitFromRequest("1.2.3.4", *option, connection.stream_info_, 173,
+		      connection.stream_info_.downstream_connection_info_provider_->localAddress(),
+		      headers);
 
   EXPECT_EQ(log.entry_.is_ingress(), true);
   EXPECT_EQ(log.entry_.entry_type(), ::cilium::EntryType::Request);

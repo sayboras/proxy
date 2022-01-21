@@ -71,10 +71,12 @@ CONST_STRING_VIEW(statusSV, ":status");
 
 void AccessLog::Entry::InitFromConnection(const std::string& policy_name,
                                           const Cilium::SocketOption& option,
-                                          const StreamInfo::StreamInfo& info) {
+                                          const StreamInfo::StreamInfo& info,
+                                          uint32_t destination_identity,
+                                          const Network::Address::InstanceConstSharedPtr& dst_address) {
   entry_.set_policy_name(policy_name);
   entry_.set_source_security_id(option.identity_);
-  entry_.set_destination_security_id(option.destination_identity_);
+  entry_.set_destination_security_id(destination_identity);
   entry_.set_is_ingress(option.ingress_);
 
   auto source_address = info.downstreamAddressProvider().remoteAddress();
@@ -82,9 +84,8 @@ void AccessLog::Entry::InitFromConnection(const std::string& policy_name,
     entry_.set_source_address(source_address->asString());
   }
 
-  auto destination_address = info.downstreamAddressProvider().localAddress();
-  if (destination_address != nullptr) {
-    entry_.set_destination_address(destination_address->asString());
+  if (dst_address != nullptr) {
+    entry_.set_destination_address(dst_address->asString());
   }
 }
 
@@ -135,8 +136,10 @@ bool AccessLog::Entry::UpdateFromMetadata(const std::string& l7proto,
 void AccessLog::Entry::InitFromRequest(const std::string& policy_name,
                                        const Cilium::SocketOption& option,
                                        const StreamInfo::StreamInfo& info,
+                                       uint32_t destination_identity,
+                                       const Network::Address::InstanceConstSharedPtr& dst_address,
                                        const Http::RequestHeaderMap& headers) {
-  InitFromConnection(policy_name, option, info);
+  InitFromConnection(policy_name, option, info, destination_identity, dst_address);
 
   auto time = info.startTime();
   entry_.set_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(
