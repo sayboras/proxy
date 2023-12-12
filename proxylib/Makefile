@@ -18,6 +18,12 @@ endif
 GO_BUILD_WITH_CGO = CGO_ENABLED=1 $(CGO_CC) $(GO) build
 
 EXTRA_GO_BUILD_LDFLAGS = -extldflags -Wl,-soname,libcilium.so
+FIPS_MODE ?= true
+
+ifeq ($(FIPS_MODE),true)
+  GOEXPERIMENT=boringcrypto
+  GO_TAGS_FLAGS = fips
+endif
 
 TARGET := libcilium.so
 
@@ -26,7 +32,7 @@ TARGET := libcilium.so
 all: $(TARGET)
 
 $(TARGET):
-	$(QUIET)$(GO_BUILD_WITH_CGO) -ldflags '$(EXTRA_GO_BUILD_LDFLAGS)' -o $@ -buildmode=c-shared
+	$(QUIET)GOEXPERIMENT=$(GOEXPERIMENT) $(GO_BUILD_WITH_CGO) -ldflags '$(EXTRA_GO_BUILD_LDFLAGS)' -tags=$(GO_TAGS_FLAGS) -o $@ -buildmode=c-shared
 
 clean:
 	-$(QUIET)rm -f $(TARGET)

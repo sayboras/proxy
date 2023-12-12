@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/proxy/proxylib/libcilium"
+    _ "github.com/cilium/proxy/proxylib/fips"
 )
 
 func init() {
