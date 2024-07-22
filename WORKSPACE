@@ -38,7 +38,8 @@ git_repository(
         # This patch is needed to fix the build with clang for envoy 1.29+
         # https://github.com/envoyproxy/envoy/pull/31894
         "@//patches:0004-Patch-cel-cpp-to-not-break-build.patch",
-        "@//patches:0005-original_dst_cluster-Avoid-multiple-hosts-for-the-sa.patch",
+        # TODO(tam): Confirm if this patch is needed for 1.31
+        # "@//patches:0005-original_dst_cluster-Avoid-multiple-hosts-for-the-sa.patch",
     ],
     # // clang-format off: Envoy's format check: Only repository_locations.bzl may contains URL references
     remote = "https://github.com/envoyproxy/envoy.git",
