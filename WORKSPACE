@@ -15,7 +15,7 @@ ENVOY_REPO = "envoy"
 # No other line in this file may have ENVOY_SHA followed by an equals sign!
 #
 # renovate: datasource=github-releases depName=envoyproxy/envoy digestVersion=v1.31.3
-ENVOY_SHA = "f1c0c6e8d9bcf61799855aaf114a1f879a2149b8"
+ENVOY_SHA = "c7d39678f982efceb3b42f2c80ea7d8813bef75c"
 
 # // clang-format off: unexpected @bazel_tools reference, please indirect via a definition in //bazel
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
@@ -32,14 +32,15 @@ git_repository(
     patch_args = ["apply"],
     patch_tool = "git",
     patches = [
-        "@//patches:0001-network-Add-callback-for-upstream-authorization.patch",
-        "@//patches:0002-tcp_proxy-Add-filter-state-proxy_read_before_connect.patch",
-        "@//patches:0003-listener-add-socket-options.patch",
+#        "@//patches:0001-network-Add-callback-for-upstream-authorization.patch",
+#        "@//patches:0002-tcp_proxy-Add-filter-state-proxy_read_before_connect.patch",
+#        "@//patches:0003-listener-add-socket-options.patch",
         # This patch is needed to fix the build with clang for envoy 1.29+
         # https://github.com/envoyproxy/envoy/pull/31894
         "@//patches:0004-Patch-cel-cpp-to-not-break-build.patch",
         # TODO(tam): Confirm if this patch is needed for 1.31
         # "@//patches:0005-original_dst_cluster-Avoid-multiple-hosts-for-the-sa.patch",
+        "@//patches:0006-google-url.patch",
     ],
     # // clang-format off: Envoy's format check: Only repository_locations.bzl may contains URL references
     remote = "https://github.com/envoyproxy/envoy.git",
