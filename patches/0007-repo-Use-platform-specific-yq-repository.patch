@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 16 Jan 2026 00:00:00 +0000
+Subject: [PATCH] repo: Use platform-specific yq repository
+
+Use @yq_linux_amd64 directly instead of @yq symlink to work around
+the issue where the symlink target isn't fetched in time when the
+envoy_repo repository rule runs.
+
+Signed-off-by: Claude <noreply@anthropic.com>
+---
+ bazel/repo.bzl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bazel/repo.bzl b/bazel/repo.bzl
+--- a/bazel/repo.bzl
++++ b/bazel/repo.bzl
+@@ -258,7 +258,7 @@ _envoy_repo = repository_rule(
+         "envoy_version": attr.label(default = "@envoy//:VERSION.txt"),
+         "envoy_api_version": attr.label(default = "@envoy//:API_VERSION.txt"),
+         "envoy_ci_config": attr.label(default = "@envoy//:.github/config.yml"),
+-        "yq": attr.label(default = "@yq"),
++        "yq": attr.label(default = "@yq_linux_amd64//:yq"),
+     },
+     environ = ["BAZEL_LLVM_PATH"],
+ )
