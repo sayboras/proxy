@@ -190,7 +190,7 @@ index 2536292562..eb2d9a30ad 100644
 +          Network::Utility::copyInternetAddressAndPort(*dst_ip));
 +      host = std::shared_ptr(THROW_OR_RETURN_VALUE(
 +          HostImpl::create(info(), info()->name() + ":" + address, std::move(host_ip_port), nullptr,
-+          nullptr, 1, envoy::config::core::v3::Locality().default_instance(),
++          nullptr, 1, std::make_shared<envoy::config::core::v3::Locality>(),
 +          envoy::config::endpoint::v3::Endpoint::HealthCheckConfig().default_instance(), 0,
 +          envoy::config::core::v3::UNKNOWN), std::unique_ptr<HostImpl>));
 +      ENVOY_LOG(debug, "Created host {}.", *host);
