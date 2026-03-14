@@ -5,7 +5,6 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <list>
 #include <memory>
 #include <string>
 #include <utility>
@@ -14,6 +13,7 @@
 #include "envoy/common/exception.h"
 #include "envoy/common/matchers.h"
 #include "envoy/common/pure.h"
+#include "envoy/common/regex.h"
 #include "envoy/config/core/v3/base.pb.h"
 #include "envoy/config/subscription.h"
 #include "envoy/http/header_map.h"
@@ -47,6 +47,7 @@
 #include "cilium/api/npds.pb.h"
 #include "cilium/api/npds.pb.validate.h" // IWYU pragma: keep
 #include "cilium/conntrack.h"
+#include "re2/re2.h"
 
 namespace Envoy {
 namespace Cilium {
@@ -74,6 +75,13 @@ class PortNetworkPolicyRules;
 // use of named ports and numbered ports in Cilium Network Policy at the same time).
 using PolicyMap = absl::btree_map<PortRange, PortNetworkPolicyRules, PortRangeCompare>;
 
+// Supported message types
+using RuleVerdict = enum {
+  None = 0,
+  Allow = 1,
+  Deny = 2,
+};
+
 // PortPolicy holds a reference to a set of rules in a policy map that apply to the given port.
 // Methods then iterate through the set to determine if policy allows or denies. This is needed to
 // support multiple rules on the same port, like when named ports are used, or when deny policies
@@ -92,36 +100,33 @@ public:
 
   // useProxylib returns true if a proxylib parser should be used.
   // 'l7_proto' is set to the parser name in that case.
-  bool useProxylib(uint32_t proxy_id, uint32_t remote_id, std::string& l7_proto) const;
+  bool useProxylib(uint16_t proxy_id, uint32_t remote_id, std::string& l7_proto) const;
   // HTTP-layer policy check. 'headers' and 'log_entry' may be manipulated by the policy.
-  bool allowed(uint32_t proxy_id, uint32_t remote_id, Envoy::Http::RequestHeaderMap& headers,
+  bool allowed(uint16_t proxy_id, uint32_t remote_id, Envoy::Http::RequestHeaderMap& headers,
                Cilium::AccessLog::Entry& log_entry) const;
   // Network-layer policy check
-  bool allowed(uint32_t proxy_id, uint32_t remote_id, absl::string_view sni) const;
+  bool allowed(uint16_t proxy_id, uint32_t remote_id, absl::string_view sni) const;
   // Envoy filter metadata policy check
-  bool allowed(uint32_t proxy_id, uint32_t remote_id,
+  bool allowed(uint16_t proxy_id, uint32_t remote_id,
                const envoy::config::core::v3::Metadata& metadata) const;
   // getServerTlsContext returns the server TLS context, if any. If a non-null pointer is returned,
   // then also the config pointer '*config' is set.
   // If '*config' is nullptr and 'raw_socket_allowed' is 'true' on return then the policy
   // allows the connection without TLS and a raw socket should be used.
-  Ssl::ContextSharedPtr getServerTlsContext(uint32_t proxy_id, uint32_t remote_id,
+  Ssl::ContextSharedPtr getServerTlsContext(uint16_t proxy_id, uint32_t remote_id,
                                             absl::string_view sni,
-                                            const Ssl::ContextConfig** config,
+                                            const Ssl::ContextConfig*& config,
                                             bool& raw_socket_allowed) const;
   // getClientTlsContext returns the client TLS context, if any. If a non-null pointer is returned,
   // then also the config pointer '*config' is set.
   // If '*config' is nullptr and 'raw_socket_allowed' is 'true' on return then the policy
   // allows the connection without TLS and a raw socket should be used.
-  Ssl::ContextSharedPtr getClientTlsContext(uint32_t proxy_id, uint32_t remote_id,
+  Ssl::ContextSharedPtr getClientTlsContext(uint16_t proxy_id, uint32_t remote_id,
                                             absl::string_view sni,
-                                            const Ssl::ContextConfig** config,
+                                            const Ssl::ContextConfig*& config,
                                             bool& raw_socket_allowed) const;
 
 private:
-  bool forRange(std::function<bool(const PortNetworkPolicyRules&, bool& denied)> allowed) const;
-  bool forFirstRange(std::function<bool(const PortNetworkPolicyRules&)> f) const;
-
   const PolicyMap& map_;
   // using raw pointers by design:
   // - pointer to distinguish between no rules and empty rules
@@ -131,7 +136,6 @@ private:
   //   before the old rules are deleted; worker thread drop references to policy rules before
   //   returning to the event loop, so after the posted lambda executes it is safe to delete the old
   //   rules.
-  const PortNetworkPolicyRules* wildcard_rules_;
   const PortNetworkPolicyRules* port_rules_;
   const bool has_http_rules_;
 };
@@ -144,8 +148,8 @@ public:
       : ipv4_(ipv4), ipv6_(ipv6) {};
   IpAddressPair(const cilium::NetworkPolicy& proto);
 
-  Network::Address::InstanceConstSharedPtr ipv4_{};
-  Network::Address::InstanceConstSharedPtr ipv6_{};
+  Network::Address::InstanceConstSharedPtr ipv4_;
+  Network::Address::InstanceConstSharedPtr ipv6_;
 };
 
 class PolicyInstance {
@@ -157,18 +161,18 @@ public:
     }
   };
 
-  virtual bool allowed(bool ingress, uint32_t proxy_id, uint32_t remote_id, uint16_t port,
+  virtual bool allowed(bool ingress, uint16_t proxy_id, uint32_t remote_id, uint16_t port,
                        Envoy::Http::RequestHeaderMap& headers,
                        Cilium::AccessLog::Entry& log_entry) const PURE;
 
-  virtual bool allowed(bool ingress, uint32_t proxy_id, uint32_t remote_id, absl::string_view sni,
+  virtual bool allowed(bool ingress, uint16_t proxy_id, uint32_t remote_id, absl::string_view sni,
                        uint16_t port) const PURE;
 
   virtual const PortPolicy findPortPolicy(bool ingress, uint16_t port) const PURE;
 
   // Returns true if the policy specifies l7 protocol for the connection, and
   // returns the l7 protocol string in 'l7_proto'
-  virtual bool useProxylib(bool ingress, uint32_t proxy_id, uint32_t remote_id, uint16_t port,
+  virtual bool useProxylib(bool ingress, uint16_t proxy_id, uint32_t remote_id, uint16_t port,
                            std::string& l7_proto) const PURE;
 
   virtual const std::string& conntrackName() const PURE;
@@ -262,6 +266,8 @@ public:
   Server::Configuration::TransportSocketFactoryContext& transportFactoryContext() const {
     return *transport_factory_context_;
   }
+
+  Regex::Engine& regexEngine() const { return context_.regexEngine(); }
 
   void tlsWrapperMissingPolicyInc() const;
 
@@ -371,41 +377,84 @@ private:
 };
 using NetworkPolicyMapSharedPtr = std::shared_ptr<const NetworkPolicyMap>;
 
-struct SniPattern {
-  std::string pattern;
+// SniPattern implements a matcher for allowed SNI patterns.
+// See comment for `getValidPatternRE()` method to understand structure of a valid pattern.
+//
+// SniPattern supports two types of wildcards in match pattern:
+// - '*' matches any number of valid DNS characters within a subdomain boundary.
+// - '**' matches any non empty DNS pattern (across subdomain boundary).
+//
+// Additionaly "*" is a special pattern that matches any valid DNS.
+//
+// Examples:
+//
+// - `*.cilium.io` matches all first-level subdomains of `cilium.io`:
+//   - Matches: `www.cilium.io`, `blog.cilium.io`
+//   - Does NOT match: `cilium.io`, `foo.bar.cilium.io`, `kubernetes.io`
+//
+// - `*cilium.io` matches `cilium.io` and any domain ending with the `cilium.io` suffix:
+//   - Matches: `cilium.io`, `sub-cilium.io`, `subcilium.io`
+//   - Does NOT match: `www.cilium.io`, `blog.cilium.io`
+//
+// - `sub*.cilium.io` matches subdomains of `cilium.io` that start with the "sub" prefix:
+//   - Matches: `sub.cilium.io`, `subdomain.cilium.io`
+//   - Does NOT match: `www.cilium.io`, `blog-sub.cilium.io`, `blog.sub.cilium.io`, `cilium.io`
+//
+// - `**.cilium.io` matches all subdomains of `cilium.io` at any depth:
+//   - Matches: `www.cilium.io`, `test.app.cilium.io`
+//   - Does NOT match: `cilium.io`
+class SniPattern : public Logger::Loggable<Logger::Id::config> {
+public:
+  explicit SniPattern(const Regex::Engine& engine, absl::string_view sni);
 
-  explicit SniPattern(const std::string& p) : pattern(absl::AsciiStrToLower(p)) {}
+  // Helper method to check that the provided match pattern is valid and can be used
+  // to construct an instance of SniPattern. A valid match pattern should:
+  //
+  // - Contain only valid DNS characters('-a-zA-Z0-9_') and the wildcard specifier ('*')
+  // - No consecutive wildcard specifiers, except two for multiple whole subdomain matches.
+  // - Not have a trailing '.'
+  // - Not have an empty subdomain (multiple consecutive '.' are not allowed)
+  // - Empty pattern is only allowed due to testing, it does not match anything
+  static bool isValid(absl::string_view pattern) {
+    return pattern.empty() || re2::RE2::FullMatch(pattern, getValidPatternRE());
+  }
 
   bool matches(const absl::string_view sni) const {
-    if (pattern.empty() || sni.empty()) {
-      return false;
-    }
+    // The constructed match pattern or match name will be case sensitive.
+    // Convert to lower case before checking.
     auto const lower_sni = absl::AsciiStrToLower(sni);
-    // Perform lower case exact match if there is no wildcard prefix
-    if (!pattern.starts_with("*")) {
-      return pattern == lower_sni;
+    if (isExplicitFullMatch()) {
+      return match_name_ == lower_sni;
     }
 
-    // Pattern is "**.<domain>"
-    if (pattern.starts_with("**.")) {
-      return lower_sni.ends_with(pattern.substr(2));
+    if (matcher_) {
+      return matcher_->match(lower_sni); // Anchored match
     }
-
-    // Pattern is "*.<domain>"
-    if (pattern.starts_with("*.")) {
-      auto const sub_pattern = pattern.substr(1);
-      if (!lower_sni.ends_with(sub_pattern)) {
-        return false;
-      }
-      auto const prefix = lower_sni.substr(0, sni.size() - sub_pattern.size());
-      // Make sure that only and exactly one label is before the wildcard
-      return !prefix.empty() && prefix.find_first_of('.') == std::string::npos;
-    }
-
     return false;
   }
 
-  void toString(std::string& res) const { res.append(fmt::format("\"{}\"", pattern)); }
+  void toString(std::string& res) const {
+    if (isExplicitFullMatch()) {
+      res.append(fmt::format("\"{}\"", match_name_));
+    } else if (matcher_) {
+      res.append(fmt::format("\"{}\"", matcher_->pattern()));
+    } else {
+      res.append("\"\"");
+    }
+  }
+
+private:
+  // Returns regular expression to check for a valid DNS pattern with optional additional
+  // wildcard specifier ('*') characters.
+  static const re2::RE2& getValidPatternRE() {
+    CONSTRUCT_ON_FIRST_USE(re2::RE2, "(([*]{1,2}|[*]?[-a-zA-Z0-9_]+([*][-a-zA-Z0-9_]+)*[*]?)[.])*"
+                                     "([*]{1,2}|[*]?[-a-zA-Z0-9_]+([*][-a-zA-Z0-9_]+)*[*]?)");
+  }
+
+  bool isExplicitFullMatch() const { return !match_name_.empty(); }
+
+  std::string match_name_;
+  std::shared_ptr<const Envoy::Regex::CompiledMatcher> matcher_;
 };
 
 } // namespace Cilium

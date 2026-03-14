@@ -127,21 +127,26 @@ message TLSContext {
 // If all the predicates of a rule match a flow, the flow is matched by the
 // rule.
 message PortNetworkPolicyRule {
-  reserved 1; // used in Cilium versions upto 1.14
-
   // Precedence level for this rule. Rules with **higher** numeric values take
   // precedence, even over deny rules of lower precedence level.
   // The lowest precedence (zero) is used when not specified.
   uint32 precedence = 10;
 
-  // Traffic on this port is denied for all `remote_policies` if true
-  bool deny = 8;
+  // Optional verdict, mutually exclusive. If missing then the verdict is an allow.
+  oneof verdict {
+    // Precedence after which policy evaluation should be continued at for the selected
+    // remotes_policies.
+    uint32 pass_precedence = 1;
+
+    // Traffic on this port is denied for all `remote_policies` if true
+    bool deny = 8;
+  }
 
   // ProxyID is non-zero if the rule was an allow rule with an explicit listener reference.
   // The given value corresponds to the 'proxy_id' value in the BpfMetadata listener filter
   // configuration.
   // This rule should be ignored if not executing in the referred listener.
-  uint32 proxy_id = 9;
+  uint32 proxy_id = 9 [(validate.rules).uint32.lte = 65535];
 
   // Optional name for the rule, can be used in logging and error messages.
   string name = 5;
@@ -161,7 +166,27 @@ message PortNetworkPolicyRule {
   TLSContext upstream_tls_context = 4;
 
   // Optional allowed SNIs in TLS handshake.
-  repeated string server_names = 6;
+  // The validation pattern here is synced with the corresponding k8s type in cilium/cilium.
+  // The validation pattern consists of one or more dot-delimited subdomains, where each
+  // subdomain can be:
+  // - '*',
+  // - '**', or
+  // - a pattern of one or more valid DNS name characters, optionally including non-consecutive
+  //   wildcard specifiers ('*')
+  //
+  // The pattern consists of repeating parts:
+  // <DNSCHARS> = "[-a-zA-Z0-9_]"
+  // <SUBDOMAIN> = "[*]?<DNSCHARS>+([*]<DNSCHARS>+)*[*]?"
+  // <SUBPATTERN> = "([*]{1,2}|<SUBDOMAIN>)"
+  // PATTERN = "^(<SUBPATTERN>[.])*<SUBPATTERN>$"
+  repeated string server_names = 6 [(validate.rules).repeated = {
+    items: {
+      string: {
+        pattern: "^(([*]{1,2}|[*]?[-a-zA-Z0-9_]+([*][-a-zA-Z0-9_]+)*[*]?)[.])*"
+                 "([*]{1,2}|[*]?[-a-zA-Z0-9_]+([*][-a-zA-Z0-9_]+)*[*]?)$"
+      }
+    }
+  }];
 
   // Optional L7 protocol parser name. This is only used if the parser is not
   // one of the well knows ones. If specified, the l7 parser having this name

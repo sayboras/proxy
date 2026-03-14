@@ -80,7 +80,7 @@ CONST_STRING_VIEW(xRequestIdSV, "x-request-id");
 CONST_STRING_VIEW(statusSV, ":status");
 
 void AccessLog::Entry::initFromConnection(
-    const std::string& policy_name, uint32_t proxy_id, bool ingress, uint32_t source_identity,
+    const std::string& policy_name, uint16_t proxy_id, bool ingress, uint32_t source_identity,
     const Network::Address::InstanceConstSharedPtr& source_address, uint32_t destination_identity,
     const Network::Address::InstanceConstSharedPtr& destination_address, TimeSource* time_source) {
   request_logged_ = false;
@@ -143,7 +143,7 @@ bool AccessLog::Entry::updateFromMetadata(const std::string& l7proto,
   return changed;
 }
 
-void AccessLog::Entry::initFromRequest(const std::string& policy_name, uint32_t proxy_id,
+void AccessLog::Entry::initFromRequest(const std::string& policy_name, uint16_t proxy_id,
                                        bool ingress, uint32_t source_identity,
                                        const Network::Address::InstanceConstSharedPtr& src_address,
                                        uint32_t destination_identity,
@@ -238,7 +238,7 @@ void AccessLog::Entry::updateFromResponse(const Http::ResponseHeaderMap& headers
   http_entry->clear_headers();
 
   // Add back the x-request-id, if any
-  if (request_id.length() > 0) {
+  if (!request_id.empty()) {
     ::cilium::KeyValue* kv = http_entry->add_headers();
     kv->set_key(xRequestIdSV.data(), xRequestIdSV.size());
     kv->set_value(request_id);

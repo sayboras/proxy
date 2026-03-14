@@ -1,4 +1,4 @@
-From b55bc60e9488f2970391cb6b597abf7a57cb0d25 Mon Sep 17 00:00:00 2001
+From 8c6ca69f1bdbc6697216e1831659da33c95282b9 Mon Sep 17 00:00:00 2001
 From: Jarno Rajahalme <jarno@isovalent.com>
 Date: Fri, 24 May 2024 18:27:28 +0200
 Subject: [PATCH 3/7] original_dst_cluster: Avoid multiple hosts for the same
@@ -24,14 +24,13 @@ hosts map, so that the workers do not need to stall for possibly large
 map updates.
 
 Signed-off-by: Jarno Rajahalme <jarno@isovalent.com>
-Signed-off-by: Tam Mach <sayboras@yahoo.com>
 ---
- .../original_dst/original_dst_cluster.cc      | 259 +++++++++++-------
- .../original_dst/original_dst_cluster.h       |  43 +--
- 2 files changed, 189 insertions(+), 113 deletions(-)
+ .../original_dst/original_dst_cluster.cc      | 261 +++++++++++-------
+ .../original_dst/original_dst_cluster.h       |  47 ++--
+ 2 files changed, 192 insertions(+), 116 deletions(-)
 
 diff --git a/source/extensions/clusters/original_dst/original_dst_cluster.cc b/source/extensions/clusters/original_dst/original_dst_cluster.cc
-index 2536292..60e598e 100644
+index 2536292562..eb2d9a30ad 100644
 --- a/source/extensions/clusters/original_dst/original_dst_cluster.cc
 +++ b/source/extensions/clusters/original_dst/original_dst_cluster.cc
 @@ -29,6 +29,19 @@ OriginalDstClusterHandle::~OriginalDstClusterHandle() {
@@ -128,6 +127,9 @@ index 2536292..60e598e 100644
 -    // The first worker that creates a host for the address defines the primary
 -    // host structure.
 -    new_host_map->emplace(address, std::make_shared<HostsForAddress>(host));
+-  }
+-  ENVOY_LOG(debug, "addHost() adding {} {}.", *host, address);
+-  setHostMap(new_host_map);
 +// getHost returns the host for the address. A new host is created when needed.
 +// Called from the worker threads.
 +// When multiple worker threads call this at the same time the updates of the
@@ -149,7 +151,7 @@ index 2536292..60e598e 100644
 +
 +  // Scope the lock for reading the host_map_
 +  {
-+    absl::ReaderMutexLock lock(host_map_lock_);
++    absl::ReaderMutexLock lock(&host_map_lock_);
 +    // Check if a host with the destination address is already in the host map.
 +    // This may have been updated since the loadbalancer was created.
 +    chost = findHost(*host_map_.get(), address);
@@ -224,7 +226,7 @@ index 2536292..60e598e 100644
 +  // Consolidate updates into the new host map
 +  // Loadbalancers can not add any updates while we keep these locks, so keep this short!
 +  {
-+    absl::WriterMutexLock lock(host_map_lock_);
++    absl::WriterMutexLock lock(&host_map_lock_);
 +    absl::WriterMutexLock updates_lock(&updates_map_lock_);
 +
 +    if (updates_map_->empty()) {
@@ -241,9 +243,7 @@ index 2536292..60e598e 100644
 +    // Make available for load balancers
 +    host_map_ = new_host_map;
 +    updates_map_.swap(empty_map);
-   }
--  ENVOY_LOG(debug, "addHost() adding {} {}.", *host, address);
--  setHostMap(new_host_map);
++  }
  
 -  // Given the current config, only EDS clusters support multiple priorities.
    ASSERT(priority_set_.hostSetsPerPriority().size() == 1);
@@ -356,7 +356,7 @@ index 2536292..60e598e 100644
  
    cleanup_timer_->enableTimer(cleanup_interval_ms_);
 diff --git a/source/extensions/clusters/original_dst/original_dst_cluster.h b/source/extensions/clusters/original_dst/original_dst_cluster.h
-index 5590556..3bade83 100644
+index 55905560bd..3152af8664 100644
 --- a/source/extensions/clusters/original_dst/original_dst_cluster.h
 +++ b/source/extensions/clusters/original_dst/original_dst_cluster.h
 @@ -22,25 +22,21 @@ namespace Upstream {
@@ -418,19 +418,21 @@ index 5590556..3bade83 100644
    };
  
 -  HostMultiMapConstSharedPtr getCurrentHostMap() {
+-    absl::ReaderMutexLock lock(host_map_lock_);
 +  const HostUseMap* getHostMap() {
-+    absl::ReaderMutexLock lock(host_map_lock_);
++    absl::ReaderMutexLock lock(&host_map_lock_);
 +    return host_map_.get();
 +  }
 +
 +  HostUseMapConstSharedPtr getCurrentHostMap() {
-     absl::ReaderMutexLock lock(host_map_lock_);
++    absl::ReaderMutexLock lock(&host_map_lock_);
      return host_map_;
    }
  
 -  void setHostMap(const HostMultiMapConstSharedPtr& new_host_map) {
+-    absl::WriterMutexLock lock(host_map_lock_);
 +  void setHostMap(const HostUseMapConstSharedPtr& new_host_map) {
-     absl::WriterMutexLock lock(host_map_lock_);
++    absl::WriterMutexLock lock(&host_map_lock_);
      host_map_ = new_host_map;
    }
  
@@ -452,5 +454,5 @@ index 5590556..3bade83 100644
    absl::optional<Config::MetadataKey> metadata_key_;
    absl::optional<uint32_t> port_override_;
 -- 
-2.52.0
+2.43.0
 

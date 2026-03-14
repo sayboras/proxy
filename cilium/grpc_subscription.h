@@ -25,7 +25,7 @@ extern envoy::config::core::v3::ConfigSource cilium_xds_api_config;
 // GrpcMux wrapper to get access to control plane identifier
 class GrpcMuxImpl : public Config::GrpcMuxImpl {
 public:
-  explicit GrpcMuxImpl(Config::GrpcMuxContext& grpc_mux_context)
+  GrpcMuxImpl(Config::GrpcMuxContext& grpc_mux_context, bool /*skip_subsequent_node*/)
       : Config::GrpcMuxImpl(grpc_mux_context) {}
 
   ~GrpcMuxImpl() override = default;

@@ -7,12 +7,15 @@
 #include "envoy/buffer/buffer.h"
 #include "envoy/common/time.h"
 #include "envoy/json/json_object.h"
+#include "envoy/network/address.h"
 #include "envoy/network/filter.h"
 #include "envoy/server/factory_context.h"
+#include "envoy/stream_info/stream_info.h"
 
 #include "source/common/buffer/buffer_impl.h"
 #include "source/common/common/logger.h"
 
+#include "absl/strings/string_view.h"
 #include "cilium/accesslog.h"
 #include "cilium/api/accesslog.pb.h"
 #include "cilium/api/network_filter.pb.h"
@@ -76,10 +79,10 @@ private:
   Network::ReadFilterCallbacks* callbacks_ = nullptr;
   uint32_t remote_id_ = 0;
   uint16_t destination_port_ = 0;
-  std::string l7proto_{};
+  std::string l7proto_;
   bool should_buffer_ = false;
   Buffer::OwnedImpl buffer_; // Buffer for initial connection data
-  Cilium::GoFilter::InstancePtr go_parser_{};
+  Cilium::GoFilter::InstancePtr go_parser_;
   Cilium::AccessLog::Entry log_entry_{};
 };
 
