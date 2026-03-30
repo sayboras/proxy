@@ -43,10 +43,9 @@ namespace Cilium {
       .WillByDefault(Invoke([](const envoy::config::core::v3::ConfigSource& sds_config_source,     \
                                const std::string& config_name,                                     \
                                Server::Configuration::ServerFactoryContext& server_context,        \
-                               Init::Manager& init_manager) {                                      \
-        auto secret_provider = Secret::API_TYPE##SdsApi::create(server_context, sds_config_source, \
-                                                                config_name, []() {});             \
-        init_manager.add(*secret_provider->initTarget());                                          \
+                               Init::Manager& /*init_manager*/) {                                  \
+        auto secret_provider = Secret::API_TYPE##SdsApi::create(                                   \
+            server_context, sds_config_source, config_name, []() {}, true);                        \
         return secret_provider;                                                                    \
       }))
 
@@ -65,7 +64,15 @@ protected:
     ON_CALL(factory_context_.server_factory_context_, secretManager())
         .WillByDefault(ReturnRef(secret_manager_));
 
-    ON_CALL_SDS_SECRET_PROVIDER(secret_manager_, TlsCertificate, TlsCertificate);
+    ON_CALL(secret_manager_, findOrCreateTlsCertificateProvider(_, _, _, _, _))
+        .WillByDefault(Invoke([](const envoy::config::core::v3::ConfigSource& sds_config_source,
+                                 const std::string& config_name,
+                                 Server::Configuration::ServerFactoryContext& server_context,
+                                 OptRef<Init::Manager> /*init_manager*/, bool warm) {
+          auto secret_provider = Secret::TlsCertificateSdsApi::create(
+              server_context, sds_config_source, config_name, []() {}, warm);
+          return secret_provider;
+        }));
     ON_CALL_SDS_SECRET_PROVIDER(secret_manager_, CertificateValidationContext,
                                 CertificateValidationContext);
     ON_CALL_SDS_SECRET_PROVIDER(secret_manager_, TlsSessionTicketKeysContext, TlsSessionTicketKeys);

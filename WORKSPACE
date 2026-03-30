@@ -42,6 +42,7 @@ git_repository(
         "@//patches:0003-original_dst_cluster-Avoid-multiple-hosts-for-the-sa.patch",
         "@//patches:0004-thread_local-reset-slot-in-worker-threads-first.patch",
         "@//patches:0005-http-header-expose-attribute.patch",
+        "@//patches:0006-repo-Make-yq-dependency-optional-for-CI-config-parsi.patch",
     ],
     # // clang-format off: Envoy's format check: Only repository_locations.bzl may contains URL references
     remote = "https://github.com/envoyproxy/envoy.git",
@@ -82,6 +83,52 @@ load("@envoy//bazel:python_dependencies.bzl", "envoy_python_dependencies")
 envoy_python_dependencies()
 
 load("@envoy//bazel:dependency_imports.bzl", "envoy_dependency_imports")
+
+# Pre-declare key Go repos before envoy_dependency_imports() so they are known
+# to Gazelle's go_repository_config (which is created by gazelle_dependencies()
+# inside envoy_dependency_imports). Without these, Gazelle's BUILD generation
+# for go_repository targets can't resolve cross-repo dependencies.
+load("@bazel_gazelle//:deps.bzl", "go_repository")
+
+go_repository(
+    name = "org_golang_x_text",
+    importpath = "golang.org/x/text",
+    sum = "h1:B3njUFyqtHDUI5jMn1YIr5B0IE2U0qck04r6d4KPAxE=",
+    version = "v0.33.0",
+    build_external = "external",
+)
+
+go_repository(
+    name = "org_golang_x_tools",
+    importpath = "golang.org/x/tools",
+    sum = "h1:a9b8iMweWG+S0OBnlU36rzLp20z1Rp10w+IY2czHTQc=",
+    version = "v0.41.0",
+    build_external = "external",
+)
+
+go_repository(
+    name = "org_golang_x_net",
+    importpath = "golang.org/x/net",
+    sum = "h1:eeHFmOGUTtaaPSGNmjBKpbng9MulQsJURQUAfUwY++o=",
+    version = "v0.49.0",
+    build_external = "external",
+)
+
+go_repository(
+    name = "org_golang_x_sys",
+    importpath = "golang.org/x/sys",
+    sum = "h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=",
+    version = "v0.42.0",
+    build_external = "external",
+)
+
+go_repository(
+    name = "org_golang_x_mod",
+    importpath = "golang.org/x/mod",
+    sum = "h1:9F4d3PHLljb6x//jOyokMv3eX+YDeepZSEo3mFJy93c=",
+    version = "v0.32.0",
+    build_external = "external",
+)
 
 envoy_dependency_imports()
 
