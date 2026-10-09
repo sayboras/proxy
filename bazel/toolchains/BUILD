@@ -59,6 +59,14 @@ cc_toolchain_config(
         # Needed by Envoy dependencies to build:
         "-Wno-unused-command-line-argument",  # tcmalloc needs this since -fuse-ld was added above
         "-Wno-deprecated-builtins",
+        # Clang releases newer than the builder image's clang 18 add warnings that the
+        # pinned Envoy dependencies trip under their own -Werror. Keep the flags unknown
+        # to older clang from being errors themselves so one flag list serves both.
+        "-Wno-unknown-warning-option",
+        "-Wno-deprecated-attributes",  # clang 23: abseil/tcmalloc lifetime_capture_by(this)
+        "-Wno-attribute-alias",  # clang 23: tcmalloc libc_override.h nothrow operator delete aliases
+        "-Wno-nullability-completeness",  # clang 23: cel-cpp headers once absl_nonnull expands to _Nonnull
+        "-Wno-error=#warnings",  # libstdc++ 16: <cstdbool> deprecation from Envoy's dynamic_modules abi.h
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -70,7 +78,13 @@ cc_toolchain_config(
         "/usr/aarch64-linux-gnu/include",
         "/usr/include",
     ],
-    cxx_flags = ["-std=c++0x"],
+    cxx_flags = [
+        "-std=c++0x",
+        # libstdc++ 15+ no longer includes <cstdint> transitively. Envoy 1.38
+        # (random_generator.h, stream_id_provider.h) and sql-parser rely on that.
+        "-include",
+        "cstdint",
+    ],
     dbg_compile_flags = ["-g"],
     # Cross-compilation flags exported as environment variables for foreign_cc
     # rules (e.g. liburing's configure_make). This ensures foreign build systems
@@ -173,6 +187,14 @@ cc_toolchain_config(
         # Needed by Envoy dependencies to build:
         "-Wno-unused-command-line-argument",  # tcmalloc needs this since -fuse-ld was added above
         "-Wno-deprecated-builtins",
+        # Clang releases newer than the builder image's clang 18 add warnings that the
+        # pinned Envoy dependencies trip under their own -Werror. Keep the flags unknown
+        # to older clang from being errors themselves so one flag list serves both.
+        "-Wno-unknown-warning-option",
+        "-Wno-deprecated-attributes",  # clang 23: abseil/tcmalloc lifetime_capture_by(this)
+        "-Wno-attribute-alias",  # clang 23: tcmalloc libc_override.h nothrow operator delete aliases
+        "-Wno-nullability-completeness",  # clang 23: cel-cpp headers once absl_nonnull expands to _Nonnull
+        "-Wno-error=#warnings",  # libstdc++ 16: <cstdbool> deprecation from Envoy's dynamic_modules abi.h
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -184,7 +206,13 @@ cc_toolchain_config(
         "/usr/x86_64-linux-gnu/include",
         "/usr/include",
     ],
-    cxx_flags = ["-std=c++0x"] + select({
+    cxx_flags = [
+        "-std=c++0x",
+        # libstdc++ 15+ no longer includes <cstdint> transitively. Envoy 1.38
+        # (random_generator.h, stream_id_provider.h) and sql-parser rely on that.
+        "-include",
+        "cstdint",
+    ] + select({
         "@envoy//bazel:msan_build": ["-stdlib=libc++"],
         "@envoy//bazel:tsan_build": ["-stdlib=libc++"],
         "//conditions:default": [],
